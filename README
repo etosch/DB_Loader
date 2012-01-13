@@ -1,13 +1,17 @@
 # DB_Loader
 
-FIXME: write description
+To load files into the cloud, use the bash script load_csv_to_cloud.sh in the scripts folder.
 
-## Usage
+A utility for managing log files.
+USAGE: lein run -m db_loader :filename ~/log_file_location/some_output_file.log :problemname problem
+lein run -m db_loader :clean (some-list-of-csv-files | all)
+lein run -m db_loader :filename ~/log_file_location/some_output_file.log :problemname problem :mysql {password P@$$w0rd db-host localhost}
 
-FIXME: write
+The :problemname argument is optional; it's used to look up and track semantically grouped problems (e.g. all dsoar problems).
+Settings are held in the ~/.db_config file. If you do not already have one, one will be created.
 
 ## License
 
-Copyright (C) 2012 FIXME
+Copyright (C) 2012
 
 Distributed under the Eclipse Public License, the same as Clojure.
