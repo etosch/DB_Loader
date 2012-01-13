@@ -119,6 +119,12 @@ then
 	    fi
 	fi
     done
+    echo "Final upload"
+    mysqlimport --local --compress --ignore-lines=1 --replace --user=$user --password=$pw --host=$host --fields-terminated-by=',' $db ~/data_dir/experiments.csv
+    mysqlimport --local --compress --ignore-lines=1 --replace --user=$user --password=$pw --host=$host --fields-terminated-by=',' $db ~/data_dir/experiment.csv
+    mysqlimport --local --compress --ignore-lines=1 --replace --user=$user --password=$pw --host=$host --fields-terminated-by=',' $db ~/data_dir/generations.csv
+    lein run -m db_loader :clean experiments experiment generations
+    echo "Done!"
 else
     echo "Please supply a directory containing log files to be processed. Log files extensions should be .gz, .tar, or .log"
 fi
