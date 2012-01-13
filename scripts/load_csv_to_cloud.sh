@@ -101,7 +101,7 @@ then
 		    f=${f:0:$((${#f}-3))}
 		fi
    		echo "Processing $f..."
- 		lein run -m db_loader :filename $f :problemname grammar
+ 		lein run -m db_loader :filename $f
 		gen_size=(`du -hm ${data_dir:1:$((${#data_dir}-2))}generations.csv`)
 		if [ ${gen_size[0]} -gt 500 ]
 		then
