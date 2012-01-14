@@ -18,17 +18,19 @@ then
     lein clean
     lein deps
     lein compile
-    #### Set up config it it isn't already set up and read in config data
+    echo "---Set up config it it isn't already set up and read in config data---"
     db_config=$HOME/.db_config
-    if [ -e $db_config ]
+    if [ -s $db_config ]
     then
 	cmd="(let [m (read-string (slurp \"$db_config\"))] (list (:id m) (:data_dir m) (:user m) (:password m) (:hostname m) (:database m)))"
 	config_data=(`java -cp ./lib/$clojure clojure.main -e "$cmd"`)
 	id=${config_data[0]:1}
-	data_dir=${config_data[1]}
-	if [ $data_dir = nil ]
+	data_dir_temp=${config_data[1]}
+	if [ $data_dir_temp = nil ]
 	then
-	    data_dir="\"$HOME/data_dir/\""
+	    data_dir=$HOME/data_dir/
+	else
+	    data_dir=${data_dir_temp:1:$((${#data_dir_temp}-2))}	    
 	fi
 	user=${config_data[2]}
 	if [ $user = nil ]
@@ -70,26 +72,31 @@ then
 	then 
 	    mkdir $data_dir
 	fi
-	data_dir="\"$data_dir"\"
-	id=nil
+	id=0
     fi
+    echo "Get problem data and the maximum id from $db..."
     query="select problem_name, problem_id from experiments group by problem_name, problem_id"
     problem_map=(`mysql -u$user -p$pw -h$host -e "\$query" $db`)
     problem_data=${problem_map[@]:2}
     maxid=(`mysql -u$user -p$pw -h$host -e "select max(id) from experiments" $db`)
-    if [ $id = nil -o $id -lt ${maxid[1]} ]
+    if [ $id -lt ${maxid[1]} ]
     then
-	echo $id, ${maxid[1]}
 	id=${maxid[1]}
     fi
-    echo "{:data_dir $data_dir, :user $user, :password $pw, :hostname $host, :database $db}" > $db_config
+    echo "{:data_dir \"$data_dir\", :user $user, :password $pw, :hostname $host, :database $db}" > $db_config
     java -cp ./lib/$clojure clojure.main -e "(spit \"$db_config\" (assoc (read-string (slurp \"$db_config\")) :id $id))"
     java -cp ./lib/$clojure clojure.main -e "(spit \"$db_config\" (assoc (read-string (slurp \"$db_config\")) :problem_data (apply hash-map (map str '($problem_data)))))"
+    max_num_records_to_insert=(`ls -l $logfile_folder | wc -l`)
+    reserve_id=$(( $max_num_records_to_insert + $id ))
+    echo "Reserve space up to $reserve_id in the experiments table for $max_num_records_to_insert new records..."
+    mysql -u$user -p$pw -h$host -e "insert into experiments (id) values ($reserve_id)" $db
     #### Process the files
+    echo "Begin processing $logfile_folder..."
     for f in "$logfile_folder"/*
     do
- 	exists_in_db=(`mysql -u$user -p$pw -h$host -e "select count(*) from experiments where logfile_location='$f'" $db`)
- 	exists_in_csv=`grep "${f:0:$((${#f}-3))}" ${data_dir:1:$((${#data_dir}-2))}experiments.csv`
+	filename=${f:${#logfile_folder}:$((${#f}-${#logfile_folder}-3))}
+ 	exists_in_db=(`mysql -u$user -p$pw -h$host -e "select count(*) from experiments where logfile_location like '%$filename%'" $db`)
+ 	exists_in_csv=`grep $filename ${data_dir}experiments.csv`
  	if [ ${exists_in_db[1]} = 0 -a "$exists_in_csv" = "" ]
  	then 
  	    extension=${f:$((${#f}-3))}
@@ -102,15 +109,18 @@ then
 		fi
    		echo "Processing $f..."
  		lein run -m db_loader :filename $f
-		gen_size=(`du -hm ${data_dir:1:$((${#data_dir}-2))}generations.csv`)
+		gen_size=(`du -hm ${data_dir}generations.csv`)
 		if [ ${gen_size[0]} -gt 500 ]
 		then
+		    cd $data_dir
 		    echo "Uploading contents of $data_dir to $db..."
-		    mysqlimport --local --compress --ignore-lines=1 --replace --user=$user --password=$pw --host=$host --fields-terminated-by=',' $db ~/data_dir/experiments.csv
-		    mysqlimport --local --compress --ignore-lines=1 --replace --user=$user --password=$pw --host=$host --fields-terminated-by=',' $db ~/data_dir/experiment.csv
-		    mysqlimport --local --compress --ignore-lines=1 --replace --user=$user --password=$pw --host=$host --fields-terminated-by=',' $db ~/data_dir/generations.csv
+		    mysqlimport --local --compress --ignore-lines=1 --replace --user=$user --password=$pw --host=$host --fields-terminated-by=',' $db experiments.csv
+		    mysqlimport --local --compress --ignore-lines=1 --replace --user=$user --password=$pw --host=$host --fields-terminated-by=',' $db experiment.csv
+		    mysqlimport --local --compress --ignore-lines=1 --replace --user=$user --password=$pw --host=$host --fields-terminated-by=',' $db generations.csv
+		    mysqlimport --local --compress --ignore-lines=1 --replace --user=$user --password=$ps --host=$host --fields-terminated-by=',' $db summary.csv
  		    lein run -m db_loader :clean experiments experiment generations
 		    echo "Cleaning $data_dir.."
+		    cd $project_folder
 		fi
 		if [ $extension = .gz ]
 		then
@@ -119,11 +129,15 @@ then
 	    fi
 	fi
     done
-    echo "Final upload"
-    mysqlimport --local --compress --ignore-lines=1 --replace --user=$user --password=$pw --host=$host --fields-terminated-by=',' $db ~/data_dir/experiments.csv
-    mysqlimport --local --compress --ignore-lines=1 --replace --user=$user --password=$pw --host=$host --fields-terminated-by=',' $db ~/data_dir/experiment.csv
-    mysqlimport --local --compress --ignore-lines=1 --replace --user=$user --password=$pw --host=$host --fields-terminated-by=',' $db ~/data_dir/generations.csv
+    cd $data_dir
+    echo "Uploading contents of $data_dir to $db..."
+    mysqlimport --local --compress --ignore-lines=1 --replace --user=$user --password=$pw --host=$host --fields-terminated-by=',' $db ${data_dir:0}experiments.csv
+    mysqlimport --local --compress --ignore-lines=1 --replace --user=$user --password=$pw --host=$host --fields-terminated-by=',' $db ${data_dir:0}experiment.csv
+    mysqlimport --local --compress --ignore-lines=1 --replace --user=$user --password=$pw --host=$host --fields-terminated-by=',' $db ${data_dir:0}generations.csv
+    mysqlimport --local --compress --ignore-lines=1 --replace --user=$user --password=$pw --host=$host --fields-terminated-by=',' $db ${data_dir:0}summary.csv
     lein run -m db_loader :clean experiments experiment generations
+    mysql -u$user -p$pw -h$host -e "delete from experiments where id='$reserve_id'" $db
+    cd $project_folder
     echo "Done!"
 else
     echo "Please supply a directory containing log files to be processed. Log files extensions should be .gz, .tar, or .log"
