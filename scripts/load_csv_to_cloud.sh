@@ -1,5 +1,6 @@
 echo "PLEASE NOTE: File names must not contains spaces. If you have difficulty connecting to the mysql server, please contact etosch@cs.umass.edu to ensure that your ip address is in the appropriate security group."
 logfile_folder=$1
+tables=( experiments experiment generations summary )
 if [ "${logfile_folder:${#logfile_folder}-1}" = "/" ]
 then
     logfile_folder=${logfile_folder:0:${#logfile_folder}-1}
@@ -118,7 +119,7 @@ then
 		then
 		    cd $data_dir
 		    echo "Uploading contents of $data_dir to $db..."
-		    for table in $(( experiments experiment generations summary ))
+		    for table in ${tables[@]}
 		    do
  			mysqlimport --local --compress --ignore-lines=1 --replace --user=$user --password=$pw --host=$host --fields-terminated-by=',' $db $table.csv
 			lein run -m db_loader :clean $table
@@ -139,7 +140,7 @@ then
     done
     cd $data_dir
     echo "Uploading contents of $data_dir to $db..."
-    for table in $(( experiments experiment generations summary ))
+    for table in ${tables[@]}
     do
  	mysqlimport --local --compress --ignore-lines=1 --replace --user=$user --password=$pw --host=$host --fields-terminated-by=',' $db $table.csv
 	lein run -m db_loader :clean $table
