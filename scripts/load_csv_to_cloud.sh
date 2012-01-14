@@ -1,12 +1,16 @@
 echo "PLEASE NOTE: File names must not contains spaces. If you have difficulty connecting to the mysql server, please contact etosch@cs.umass.edu to ensure that your ip address is in the appropriate security group."
 logfile_folder=$1
+if [ "${logfile_folder:${#logfile_folder}-1}" = "/" ]
+then
+    logfile_folder=${logfile_folder:0:${#logfile_folder}-1}
+fi
 clojure=clojure-1.2.1.jar
 if [ -e "$logfile_folder" ]
 then
     project_folder=`find ~ -name DB_Loader`
     cd $project_folder
     #### Find lein ; if it isn't installed, set it up locally
-    if [ "" = `which lein` ]
+    if [ -z `which lein` ]
     then
 	if ! [ -e $project_folder/lein ]
 	then
@@ -114,12 +118,16 @@ then
 		then
 		    cd $data_dir
 		    echo "Uploading contents of $data_dir to $db..."
-		    mysqlimport --local --compress --ignore-lines=1 --replace --user=$user --password=$pw --host=$host --fields-terminated-by=',' $db experiments.csv
-		    mysqlimport --local --compress --ignore-lines=1 --replace --user=$user --password=$pw --host=$host --fields-terminated-by=',' $db experiment.csv
-		    mysqlimport --local --compress --ignore-lines=1 --replace --user=$user --password=$pw --host=$host --fields-terminated-by=',' $db generations.csv
-		    mysqlimport --local --compress --ignore-lines=1 --replace --user=$user --password=$ps --host=$host --fields-terminated-by=',' $db summary.csv
- 		    lein run -m db_loader :clean experiments experiment generations
-		    echo "Cleaning $data_dir.."
+		    for table in $(( experiments experiment generations summary ))
+		    do
+ 			mysqlimport --local --compress --ignore-lines=1 --replace --user=$user --password=$pw --host=$host --fields-terminated-by=',' $db $table.csv
+			lein run -m db_loader :clean $table
+# 			mysqlimport --local --compress --ignore-lines=1 --replace --user=$user --password=$pw --host=$host --fields-terminated-by=',' $db experiments.csv
+# 		    mysqlimport --local --compress --ignore-lines=1 --replace --user=$user --password=$pw --host=$host --fields-terminated-by=',' $db experiment.csv
+# 		    mysqlimport --local --compress --ignore-lines=1 --replace --user=$user --password=$pw --host=$host --fields-terminated-by=',' $db generations.csv
+# 		    mysqlimport --local --compress --ignore-lines=1 --replace --user=$user --password=$ps --host=$host --fields-terminated-by=',' $db summary.csv
+#  		    lein run -m db_loader :clean experiments experiment generations
+		    done
 		    cd $project_folder
 		fi
 		if [ $extension = .gz ]
@@ -131,11 +139,16 @@ then
     done
     cd $data_dir
     echo "Uploading contents of $data_dir to $db..."
-    mysqlimport --local --compress --ignore-lines=1 --replace --user=$user --password=$pw --host=$host --fields-terminated-by=',' $db ${data_dir:0}experiments.csv
-    mysqlimport --local --compress --ignore-lines=1 --replace --user=$user --password=$pw --host=$host --fields-terminated-by=',' $db ${data_dir:0}experiment.csv
-    mysqlimport --local --compress --ignore-lines=1 --replace --user=$user --password=$pw --host=$host --fields-terminated-by=',' $db ${data_dir:0}generations.csv
-    mysqlimport --local --compress --ignore-lines=1 --replace --user=$user --password=$pw --host=$host --fields-terminated-by=',' $db ${data_dir:0}summary.csv
-    lein run -m db_loader :clean experiments experiment generations
+    for table in $(( experiments experiment generations summary ))
+    do
+ 	mysqlimport --local --compress --ignore-lines=1 --replace --user=$user --password=$pw --host=$host --fields-terminated-by=',' $db $table.csv
+	lein run -m db_loader :clean $table
+    done
+#     mysqlimport --local --compress --ignore-lines=1 --replace --user=$user --password=$pw --host=$host --fields-terminated-by=',' $db ${data_dir:0}experiments.csv
+#     mysqlimport --local --compress --ignore-lines=1 --replace --user=$user --password=$pw --host=$host --fields-terminated-by=',' $db ${data_dir:0}experiment.csv
+#     mysqlimport --local --compress --ignore-lines=1 --replace --user=$user --password=$pw --host=$host --fields-terminated-by=',' $db ${data_dir:0}generations.csv
+#     mysqlimport --local --compress --ignore-lines=1 --replace --user=$user --password=$pw --host=$host --fields-terminated-by=',' $db ${data_dir:0}summary.csv
+#     lein run -m db_loader :clean experiments experiment generations
     mysql -u$user -p$pw -h$host -e "delete from experiments where id='$reserve_id'" $db
     cd $project_folder
     echo "Done!"
